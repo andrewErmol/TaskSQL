@@ -146,26 +146,26 @@ FROM Cards
 SELECT DISTINCT Accounts.Id,
 	MAX(Accounts.Balance) 'AccountBalance', 
 	SUM(Cards.CardBalance) 'SumOdCardBalanceWithOneAccount', 
-	ABS(SUM(Cards.CardBalance) - MAX(Accounts.Balance)) 'Difference'
+	ABS (SUM(Cards.CardBalance) - MAX (Accounts.Balance)) 'Difference'
 FROM Accounts 
 	INNER JOIN Cards ON Accounts.Id = Cards.AccountId 
-GROUP BY (Accounts.Id)
+GROUP BY Accounts.Id
 HAVING SUM(Cards.CardBalance) <> MAX(Accounts.Balance)
 
 --Item 4: Output count bank cards for everyone social status with GROUP BY
 SELECT SocialStatus, COUNT (Cards.CardNumber) 'CountCards'  
 FROM SocialStatus 
-	FULL OUTER JOIN Owners ON SocialStatus.Id = Owners.SocialStatusId
-	FULL OUTER JOIN Accounts ON Accounts.OwnerId = Owners.Id
-	FULL OUTER JOIN Cards ON Accounts.Id = Cards.AccountId
-GROUP BY SocialStatus.SocialStatus;
+	LEFT OUTER JOIN Owners ON SocialStatus.Id = Owners.SocialStatusId
+	LEFT OUTER JOIN Accounts ON Accounts.OwnerId = Owners.Id
+	LEFT OUTER JOIN Cards ON Accounts.Id = Cards.AccountId
+GROUP BY SocialStatus.Id, SocialStatus.SocialStatus;
 
 --Item 4: Output count bank cards for everyone social status WITHOUT
 SELECT SocialStatus, 
 	(SELECT COUNT (Cards.CardNumber)
 	FROM Cards
-		FULL OUTER JOIN Accounts ON Accounts.Id = Cards.AccountId
-		FULL OUTER JOIN Owners ON Owners.Id = Accounts.OwnerId
+		LEFT OUTER JOIN Accounts ON Accounts.Id = Cards.AccountId
+		LEFT OUTER JOIN Owners ON Owners.Id = Accounts.OwnerId
 		WHERE Owners.SocialStatusId = SocialStatus.Id
 		) 'CountCards'
 FROM SocialStatus
@@ -189,12 +189,12 @@ SELECT Owners.OwnerName, (SumBalances.SumBalance - SUM(Cards.CardBalance)) AS Fr
 FROM (SELECT Owners.Id, SUM (Accounts.Balance) 'SumBalance'
 	  FROM Accounts 
 		  FULL OUTER JOIN Owners ON Owners.Id = Accounts.OwnerId
-	  GROUP BY (Owners.Id)) 
+	  GROUP BY Owners.Id) 
 	  AS SumBalances
 		FULL OUTER JOIN Owners ON SumBalances.Id = Owners.Id
 		FULL OUTER JOIN Accounts ON Accounts.OwnerId = Owners.Id
 		FULL OUTER JOIN Cards ON Cards.AccountId = Accounts.Id
-	GROUP BY (Owners.OwnerName), (SumBalances.SumBalance)
+	GROUP BY Owners.OwnerName, SumBalances.SumBalance
 
 --Item 7: Write a procedure that will translate money from the account on the card
 GO
@@ -207,32 +207,30 @@ BEGIN
 	SET TRANSACTION ISOLATION LEVEL REPEATABLE READ
 	BEGIN TRY
 		BEGIN TRANSACTION MoneyTransfer
-			
-			DECLARE @AccountBalance DECIMAL(18, 2);
-			DECLARE @SumOfCardsBalance DECIMAL(18, 2);
-			
-			SET @AccountBalance = (
-				SELECT Accounts.Balance 
-				FROM Accounts 
-				WHERE Accounts.Id = @AccountIdForTransfer
+		
+		DECLARE @AccountBalance DECIMAL(18, 2);
+		DECLARE @SumOfCardsBalance DECIMAL(18, 2);
+		
+		SET @AccountBalance = (
+			SELECT Accounts.Balance 
+			FROM Accounts 
+			WHERE Accounts.Id = @AccountIdForTransfer
 			)
-
 			SET @SumOfCardsBalance = (
-				SELECT SUM (Cards.CardBalance) 
-				FROM Cards 
-					INNER JOIN Accounts ON Accounts.Id = Cards.AccountId
-				WHERE Accounts.Id = @AccountIdForTransfer
+			SELECT SUM (Cards.CardBalance) 
+			FROM Cards 
+				INNER JOIN Accounts ON Accounts.Id = Cards.AccountId
+			WHERE Accounts.Id = @AccountIdForTransfer
 			)
-
-			IF (@AccountBalance - @SumOfCardsBalance >= @SumForTransfer)
-			BEGIN
-					UPDATE Cards SET CardBalance = CardBalance + @SumForTransfer 
-					FROM Cards 
-						INNER JOIN Accounts ON Cards.AccountId = Accounts.Id
-						INNER JOIN Owners ON Accounts.OwnerId = Owners.Id
-					WHERE CardNumber = @NumberOfCardForTransfer AND AccountId = @AccountIdForTransfer
-			END
-
+		IF (@AccountBalance - @SumOfCardsBalance >= @SumForTransfer)
+		BEGIN
+			UPDATE Cards SET CardBalance = CardBalance + @SumForTransfer 
+			FROM Cards 
+				INNER JOIN Accounts ON Cards.AccountId = Accounts.Id
+				INNER JOIN Owners ON Accounts.OwnerId = Owners.Id
+			WHERE CardNumber = @NumberOfCardForTransfer AND AccountId = @AccountIdForTransfer
+	END
+	
 	END TRY
 
 	BEGIN CATCH
@@ -267,7 +265,7 @@ BEGIN
 		(Cards.CardBalance) 
 		FROM Cards 
 			INNER JOIN Accounts ON Accounts.Id = Cards.AccountId
-		GROUP BY (AccountId)
+		GROUP BY AccountId
 		HAVING SUM (Cards.CardBalance) > MAX (Accounts.Balance)
 	)
 	ROLLBACK TRANSACTION
@@ -285,7 +283,7 @@ BEGIN
 		(Cards.CardBalance) 
 		FROM Cards 
 			INNER JOIN Accounts ON Accounts.Id = Cards.AccountId
-		GROUP BY (AccountId)
+		GROUP BY AccountId
 		HAVING SUM (Cards.CardBalance) > MAX (Accounts.Balance)
 	)
 		ROLLBACK TRANSACTION
